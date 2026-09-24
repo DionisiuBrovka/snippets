@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""CLI для скачивания публичных YouTube Shorts по ссылке."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from urllib.parse import urlparse
+
+import click
+
+
+BROWSERS = ("chrome", "firefox", "edge", "brave", "opera", "safari", "vivaldi")
+
+
+def short_url(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
+    """Проверяет, что передана ссылка YouTube Short."""
+    parsed = urlparse(value)
+    host = (parsed.hostname or "").lower()
+    is_youtube = host in {"youtube.com", "www.youtube.com", "m.youtube.com"}
+    match = re.fullmatch(r"/shorts/([A-Za-z0-9_-]{11})/?", parsed.path)
+    if parsed.scheme not in {"http", "https"} or not is_youtube or not match:
+        raise click.BadParameter("укажите ссылку вида https://www.youtube.com/shorts/<id>")
+    return f"https://www.youtube.com/shorts/{match.group(1)}"
+
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("url", callback=short_url)
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path, file_okay=False, writable=True),
+    default=Path("downloads"),
+    show_default=True,
+    help="Каталог, в который будет сохранено видео.",
+)
+@click.option(
+    "--cookies-from-browser",
+    type=click.Choice(BROWSERS, case_sensitive=False),
+    help="Взять cookies из браузера для контента, доступного вашему аккаунту.",
+)
+@click.option("--quiet", is_flag=True, help="Не выводить ход загрузки yt-dlp.")
+@click.version_option(version="0.1.0")
+def main(url: str, output_dir: Path, cookies_from_browser: str | None, quiet: bool) -> None:
+    """Скачать публичный YouTube SHORT по URL.
+
+    Видео сохраняется в OUTPUT_DIR. Используйте только для материалов,
+    к которым у вас есть законный доступ.
+    """
+    try:
+        from yt_dlp import DownloadError, YoutubeDL
+    except ModuleNotFoundError:
+        raise click.ClickException(
+            "Не найдена библиотека yt-dlp. Установите зависимости: "
+            "python -m pip install -r requirements.txt"
+        )
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise click.ClickException(f"Не удалось создать каталог: {exc}") from exc
+
+    options: dict = {
+        "outtmpl": str(output_dir / "%(uploader)s - %(title)s [%(id)s].%(ext)s"),
+        "format": "bv*+ba/b",
+        "merge_output_format": "mp4",
+        "noplaylist": True,
+        "js_runtimes": {"deno": {}, "node": {}},
+        "restrictfilenames": True,
+        "windowsfilenames": True,
+        "quiet": quiet,
+    }
+    if cookies_from_browser:
+        options["cookiesfrombrowser"] = (cookies_from_browser,)
+
+    try:
+        with YoutubeDL(options) as ydl:
+            ydl.download([url])
+    except DownloadError as exc:
+        raise click.ClickException(
+            f"Не удалось скачать Short: {exc}\n"
+            "Проверьте ссылку, доступность видео и обновите yt-dlp. Для доступного вам "
+            "контента можно попробовать --cookies-from-browser chrome."
+        )
+
+    click.echo(f"Готово. Файл сохранён в: {output_dir.resolve()}")
+
+
+if __name__ == "__main__":
+    main()
