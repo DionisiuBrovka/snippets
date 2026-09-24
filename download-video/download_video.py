@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI для скачивания публичных Instagram Reels по ссылке."""
+"""CLI для скачивания видео из социальных сетей по ссылке."""
 
 from __future__ import annotations
 
@@ -12,19 +12,28 @@ import click
 BROWSERS = ("chrome", "firefox", "edge", "brave", "opera", "safari", "vivaldi")
 
 
-def reel_url(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
-    """Проверяет, что передана ссылка Instagram Reel."""
-    parsed = urlparse(value)
-    host = (parsed.hostname or "").lower()
-    is_instagram = host == "instagram.com" or host.endswith(".instagram.com")
-    is_reel = parsed.path.lower().startswith("/reel/")
-    if parsed.scheme not in {"http", "https"} or not is_instagram or not is_reel:
-        raise click.BadParameter("укажите ссылку вида https://www.instagram.com/reel/<id>/")
+def video_url(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
+    """Проверяет URL, оставляя определение площадки yt-dlp."""
+    value = value.strip()
+    try:
+        parsed = urlparse(value)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not any(char.isspace() for char in value)
+        )
+        parsed.port  # Проверить корректность номера порта.
+    except ValueError:
+        valid = False
+    if not valid:
+        raise click.BadParameter("укажите полную ссылку на видео: https://...")
     return value
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument("url", callback=reel_url)
+@click.argument("url", callback=video_url)
 @click.option(
     "--output-dir",
     "-o",
@@ -39,9 +48,9 @@ def reel_url(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
     help="Взять cookies из браузера для контента, доступного вашему аккаунту.",
 )
 @click.option("--quiet", is_flag=True, help="Не выводить ход загрузки yt-dlp.")
-@click.version_option()
+@click.version_option(version="0.1.0")
 def main(url: str, output_dir: Path, cookies_from_browser: str | None, quiet: bool) -> None:
-    """Скачать публичный Instagram REEL по URL.
+    """Скачать видео по URL; социальная сеть определяется автоматически.
 
     Видео сохраняется в OUTPUT_DIR. Используйте только для материалов,
     к которым у вас есть законный доступ.
@@ -54,13 +63,19 @@ def main(url: str, output_dir: Path, cookies_from_browser: str | None, quiet: bo
             "python -m pip install -r requirements.txt"
         )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise click.ClickException(f"Не удалось создать каталог: {exc}") from exc
 
     options: dict = {
-        "outtmpl": str(output_dir / "%(uploader)s - %(title)s [%(id)s].%(ext)s"),
+        "outtmpl": str(output_dir / "%(extractor)s - %(title).150B [%(id)s].%(ext)s"),
         "format": "bv*+ba/b",
         "merge_output_format": "mp4",
         "noplaylist": True,
+        "playlist_items": "1",  # Для публикаций с несколькими видео.
+        "ignoreerrors": False,
+        "js_runtimes": {"deno": {}, "node": {}},
         "restrictfilenames": True,
         "windowsfilenames": True,
         "quiet": quiet,
@@ -70,11 +85,13 @@ def main(url: str, output_dir: Path, cookies_from_browser: str | None, quiet: bo
 
     try:
         with YoutubeDL(options) as ydl:
-            ydl.download([url])
-    except DownloadError as exc:
+            status = ydl.download([url])
+            if status:
+                raise click.ClickException("Загрузка завершилась с ошибкой.")
+    except (DownloadError, OSError) as exc:
         raise click.ClickException(
-            f"Не удалось скачать Reel: {exc}\n"
-            "Проверьте ссылку и доступность публикации. Для доступного вам "
+            f"Не удалось скачать видео: {exc}\n"
+            "Проверьте ссылку, доступность видео и обновите yt-dlp. Для доступного вам "
             "контента можно попробовать --cookies-from-browser chrome."
         )
 

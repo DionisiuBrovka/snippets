@@ -1,2 +1,0 @@
-yt-dlp[default]>=2025.11.12
-click>=8.1,<9

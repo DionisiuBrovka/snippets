@@ -6,19 +6,21 @@
 
 | Скрипт | Описание |
 | --- | --- |
-| [download-video-insta](./download-video-insta/) | CLI-утилита для скачивания публичных Instagram Reels по ссылке. |
+| [download-video](./download-video/) | Скачивание вертикальных видео из соцсетей с автоматическим определением источника по ссылке. |
 
-## `download-video-insta`
+## `short-video-download`
 
-Консольная утилита для скачивания публичных Instagram Reels по ссылке. Видео сохраняется локально в `downloads`; для доступных вашему аккаунту публикаций поддерживаются cookies из браузера.
+Общая CLI-утилита для Instagram Reels, YouTube Shorts, TikTok, VK Клипов
+и других площадок, поддерживаемых yt-dlp. Заменяет отдельные сниппеты Instagram и YouTube.
 
 ```bash
-cd download-video-insta && pipx install .
-download-reel "https://www.instagram.com/reel/<id>/"
+cd download-video
+pipx install .
+short-video-download "https://www.youtube.com/shorts/Zga3CdIRGrw"
 ```
 
-Полный список параметров и примеры — в [README скрипта](./download-video-insta/README.md).
+Требования, параметры и примеры — в [README скрипта](./download-video/README.md).
 
 ## Структура
 
-Каждая утилита живёт в собственной папке вместе с кодом и зависимостями. По мере появления новых скриптов они будут добавляться в таблицу выше.
+Каждая утилита живёт в собственной папке вместе с кодом и зависимостями.
